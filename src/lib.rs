@@ -1,8 +1,9 @@
-use percent_encoding::{utf8_percent_encode, CONTROLS};
+use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use serde::Serialize;
 use std::collections::HashMap;
 
 #[derive(Debug, Serialize)]
+#[serde(untagged)]
 pub enum SubstituteValue {
     String(String),
     Int(i32),
@@ -17,48 +18,54 @@ fn string_from_substitute_value(value: &SubstituteValue) -> String {
     }
 }
 
-pub fn format_url(
-    base_url: &str,
-    route_template: &str,
-    substitutes: HashMap<String, SubstituteValue>,
-) -> String {
-    let safe_route = if base_url.ends_with("/") && route_template.starts_with("/") {
+fn encoded_string_from_substitute_value(value: &SubstituteValue) -> String {
+    utf8_percent_encode(&string_from_substitute_value(value), NON_ALPHANUMERIC).to_string()
+}
+
+fn strip_double_slash<'a>(base_url: &str, route_template: &'a str) -> &'a str {
+    if base_url.ends_with("/") && route_template.starts_with("/") {
         &route_template[1..]
     } else {
         route_template
-    };
-
-    let mut query_params = HashMap::new();
-
-    let mut formatted_route = safe_route.to_owned();
-
-    for (key, value) in substitutes {
-        if formatted_route.contains(&format!(":{}", key)) {
-            let encoded = match value {
-                SubstituteValue::String(string) => {
-                    utf8_percent_encode(&string, CONTROLS).to_string()
-                }
-                SubstituteValue::Int(int) => int.to_string(),
-                SubstituteValue::Float(float) => float.to_string(),
-            };
-
-            formatted_route = formatted_route.replace(&format!(":{}", key), &encoded);
-        } else {
-            let value_str = string_from_substitute_value(&value);
-
-            query_params.insert(key, value_str);
-        };
     }
+}
 
-    let formatted_querystring = serde_qs::to_string(&query_params).unwrap();
+fn format_path(route_template: &str, substitutes: HashMap<String, SubstituteValue>) -> String {
+    substitutes
+        .into_iter()
+        .fold(route_template.to_owned(), |route, (key, value)| {
+            route.replace(
+                &format!(":{}", key),
+                &encoded_string_from_substitute_value(&value),
+            )
+        })
+}
 
-    let safe_query_string = if formatted_querystring.is_empty() {
-        "".to_owned()
-    } else {
-        format!("?{}", formatted_querystring)
-    };
+pub fn format_url(
+    base_url: &str,
+    path_template: &str,
+    query_params: Option<HashMap<String, SubstituteValue>>,
+    substitutes: Option<HashMap<String, SubstituteValue>>,
+) -> Result<String, serde_urlencoded::ser::Error> {
+    let formatted_route = substitutes.map_or_else(
+        || path_template.to_string(),
+        |substitutes| format_path(path_template, substitutes),
+    );
 
-    format!("{}{}{}", base_url, formatted_route, safe_query_string)
+    let formatted_querystring = query_params.map_or_else(
+        || Ok(String::new()),
+        |query_params| {
+            let query_string = serde_urlencoded::to_string(query_params)?;
+            Ok(String::from("?") + (&query_string))
+        },
+    )?;
+
+    let safe_formatted_route = strip_double_slash(base_url, &formatted_route);
+
+    Ok(format!(
+        "{}{}{}",
+        base_url, safe_formatted_route, formatted_querystring
+    ))
 }
 
 #[cfg(test)]
@@ -70,24 +77,24 @@ mod tests {
     #[test]
     fn accepts_empty_path() {
         assert_eq!(
-            format_url("https://api.example.com", "", HashMap::new()),
-            "https://api.example.com"
+            format_url("https://api.example.com", "", None, None),
+            Ok("https://api.example.com".to_string())
         );
     }
 
     #[test]
     fn adds_path_to_base() {
         assert_eq!(
-            format_url("https://api.example.com", "/user", HashMap::new()),
-            "https://api.example.com/user"
+            format_url("https://api.example.com", "/user", None, None),
+            Ok("https://api.example.com/user".to_string())
         );
     }
 
     #[test]
     fn strips_double_slash() {
         assert_eq!(
-            format_url("https://api.example.com/", "/user", HashMap::new()),
-            "https://api.example.com/user"
+            format_url("https://api.example.com/", "/user", None, None),
+            Ok("https://api.example.com/user".to_string())
         );
     }
 
@@ -97,12 +104,13 @@ mod tests {
             format_url(
                 "https://api.example.com/",
                 "/user/:id",
-                HashMap::from([(
+                None,
+                Some(HashMap::from([(
                     "id".to_string(),
                     SubstituteValue::String("alextes".to_string())
-                )]),
+                )]),)
             ),
-            "https://api.example.com/user/alextes"
+            Ok("https://api.example.com/user/alextes".to_string())
         );
     }
 
@@ -112,12 +120,45 @@ mod tests {
             format_url(
                 "https://api.example.com/",
                 "/user",
-                HashMap::from([(
+                Some(HashMap::from([(
                     "id".to_string(),
-                    SubstituteValue::String("alextes".to_string())
-                )]),
+                    SubstituteValue::String(String::from("alextes"))
+                )])),
+                None
             ),
-            "https://api.example.com/user?id=alextes"
+            Ok("https://api.example.com/user?id=alextes".to_string())
         );
+    }
+
+    #[test]
+    fn percent_encodes_substitutes() {
+        assert_eq!(
+            format_url(
+                "https://api.example.com/",
+                "/user/:id",
+                None,
+                Some(HashMap::from([(
+                    "id".to_string(),
+                    SubstituteValue::String("alex tes".to_string())
+                )])),
+            ),
+            Ok("https://api.example.com/user/alex%20tes".to_string())
+        )
+    }
+
+    #[test]
+    fn percent_encodes_query_params() {
+        assert_eq!(
+            format_url(
+                "https://api.example.com/",
+                "/user",
+                Some(HashMap::from([(
+                    "id".to_string(),
+                    SubstituteValue::String("alex+tes".to_string())
+                )])),
+                None,
+            ),
+            Ok("https://api.example.com/user?id=alex%2Btes".to_string())
+        )
     }
 }
