@@ -1,26 +1,7 @@
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
-use serde::Serialize;
 use std::collections::HashMap;
 
-#[derive(Debug, Serialize)]
-#[serde(untagged)]
-pub enum SubstituteValue {
-    String(String),
-    Int(i32),
-    Float(f32),
-}
-
-fn string_from_substitute_value(value: &SubstituteValue) -> String {
-    match value {
-        SubstituteValue::String(string) => string.to_string(),
-        SubstituteValue::Int(int) => int.to_string(),
-        SubstituteValue::Float(float) => float.to_string(),
-    }
-}
-
-fn encoded_string_from_substitute_value(value: &SubstituteValue) -> String {
-    utf8_percent_encode(&string_from_substitute_value(value), NON_ALPHANUMERIC).to_string()
-}
+type StringMap = HashMap<String, String>;
 
 fn strip_double_slash<'a>(base_url: &str, route_template: &'a str) -> &'a str {
     if base_url.ends_with("/") && route_template.starts_with("/") {
@@ -30,13 +11,13 @@ fn strip_double_slash<'a>(base_url: &str, route_template: &'a str) -> &'a str {
     }
 }
 
-fn format_path(route_template: &str, substitutes: HashMap<String, SubstituteValue>) -> String {
+fn format_path(route_template: &str, substitutes: &StringMap) -> String {
     substitutes
         .into_iter()
         .fold(route_template.to_owned(), |route, (key, value)| {
             route.replace(
                 &format!(":{}", key),
-                &encoded_string_from_substitute_value(&value),
+                &utf8_percent_encode(&value, NON_ALPHANUMERIC).to_string(),
             )
         })
 }
@@ -44,12 +25,12 @@ fn format_path(route_template: &str, substitutes: HashMap<String, SubstituteValu
 pub fn format_url(
     base_url: &str,
     path_template: &str,
-    query_params: Option<HashMap<String, SubstituteValue>>,
-    substitutes: Option<HashMap<String, SubstituteValue>>,
+    query_params: Option<StringMap>,
+    substitutes: Option<StringMap>,
 ) -> Result<String, serde_urlencoded::ser::Error> {
-    let formatted_route = substitutes.map_or_else(
+    let formatted_path = substitutes.map_or_else(
         || path_template.to_string(),
-        |substitutes| format_path(path_template, substitutes),
+        |substitutes| format_path(path_template, &substitutes),
     );
 
     let formatted_querystring = query_params.map_or_else(
@@ -60,7 +41,7 @@ pub fn format_url(
         },
     )?;
 
-    let safe_formatted_route = strip_double_slash(base_url, &formatted_route);
+    let safe_formatted_route = strip_double_slash(base_url, &formatted_path);
 
     Ok(format!(
         "{}{}{}",
@@ -68,11 +49,67 @@ pub fn format_url(
     ))
 }
 
+struct FormatUrlV2<'a> {
+    base: &'a str,
+    path_template: Option<&'a str>,
+    query_params: Option<StringMap>,
+    substitutes: Option<StringMap>,
+}
+
+impl<'a> FormatUrlV2<'a> {
+    pub fn new(base: &'a str) -> Self {
+        Self {
+            base,
+            path_template: None,
+            query_params: None,
+            substitutes: None,
+        }
+    }
+
+    pub fn with_path_template(mut self, path_template: &'a str) -> Self {
+        self.path_template = Some(path_template);
+        self
+    }
+
+    pub fn with_query_params(mut self, params: StringMap) -> Self {
+        self.query_params = Some(params);
+        self
+    }
+
+    pub fn with_substitutes(mut self, substitutes: StringMap) -> Self {
+        self.substitutes = Some(substitutes);
+        self
+    }
+
+    pub fn format_url(self) -> Result<String, serde_urlencoded::ser::Error> {
+        let formatted_path = match (self.path_template, &self.substitutes) {
+            (Some(path_template), Some(substitutes)) => format_path(path_template, &substitutes),
+            (Some(path_template), _) => path_template.to_string(),
+            _ => String::from(""),
+        };
+
+        let formatted_querystring = &self.query_params.map_or_else(
+            || Ok(String::new()),
+            |query_params| {
+                let query_string = serde_urlencoded::to_string(query_params)?;
+                Ok(String::from("?") + (&query_string))
+            },
+        )?;
+
+        let safe_formatted_route = strip_double_slash(self.base, &formatted_path);
+
+        Ok(format!(
+            "{}{}{}",
+            self.base, safe_formatted_route, formatted_querystring
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
 
-    use crate::{format_url, SubstituteValue};
+    use crate::{format_url, FormatUrlV2};
 
     #[test]
     fn accepts_empty_path() {
@@ -105,10 +142,7 @@ mod tests {
                 "https://api.example.com/",
                 "/user/:id",
                 None,
-                Some(HashMap::from([(
-                    "id".to_string(),
-                    SubstituteValue::String("alextes".to_string())
-                )]),)
+                Some(HashMap::from([("id".to_string(), "alextes".to_string())]),)
             ),
             Ok("https://api.example.com/user/alextes".to_string())
         );
@@ -120,10 +154,7 @@ mod tests {
             format_url(
                 "https://api.example.com/",
                 "/user",
-                Some(HashMap::from([(
-                    "id".to_string(),
-                    SubstituteValue::String(String::from("alextes"))
-                )])),
+                Some(HashMap::from([("id".to_string(), String::from("alextes"))])),
                 None
             ),
             Ok("https://api.example.com/user?id=alextes".to_string())
@@ -137,10 +168,7 @@ mod tests {
                 "https://api.example.com/",
                 "/user/:id",
                 None,
-                Some(HashMap::from([(
-                    "id".to_string(),
-                    SubstituteValue::String("alex tes".to_string())
-                )])),
+                Some(HashMap::from([("id".to_string(), "alex tes".to_string())])),
             ),
             Ok("https://api.example.com/user/alex%20tes".to_string())
         )
@@ -152,13 +180,29 @@ mod tests {
             format_url(
                 "https://api.example.com/",
                 "/user",
-                Some(HashMap::from([(
-                    "id".to_string(),
-                    SubstituteValue::String("alex+tes".to_string())
-                )])),
+                Some(HashMap::from([("id".to_string(), "alex+tes".to_string())])),
                 None,
             ),
             Ok("https://api.example.com/user?id=alex%2Btes".to_string())
+        )
+    }
+
+    #[test]
+    fn test_v2_format_url() {
+        assert_eq!(
+            FormatUrlV2::new("https://api.example.com/")
+                .with_path_template("/user/:name")
+                .with_substitutes(HashMap::from([(
+                    String::from("name"),
+                    String::from("alex")
+                )]))
+                .with_query_params(HashMap::from([(
+                    String::from("active"),
+                    String::from("true")
+                )]))
+                .format_url()
+                .unwrap(),
+            "https://api.example.com/user/alex?active=true"
         )
     }
 }
