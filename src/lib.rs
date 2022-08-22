@@ -16,6 +16,7 @@
 //!
 //! ## Wishlist
 //! * Support for lists and nested values. (serde_urlencoded -> serde_qs)
+//! * No need to annotate generic T for FormatUrl
 
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use serde::Serialize;
