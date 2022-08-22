@@ -4,31 +4,31 @@
 //! essentially constructed in the function call, and a builder pattern design.
 //!
 //! ## Usage - fn pattern
-//! ```rs
+//! ```
+//! use format_url::format_url;
+//!
 //! let url = format_url(
 //!     "https://api.example.com/",
 //!     "/user",
-//!     Some(HashMap::from([("id".to_string(), "alex+tes".to_string())])),
+//!     Some(vec![("id", "alex+tes")]),
 //!     None,
-//! );
-//! // Ok("https://api.example.com/user?id=alex%2Btes".to_string())
+//! ).unwrap();
+//!
+//! assert_eq!(url, "https://api.example.com/user?id=alex%2Btes");
 //! ```
 //!
 //! ## Usage - builder pattern
-//! ```rs
+//! ```
+//! use format_url::FormatUrlV2;
+//!
 //! let url = FormatUrlV2::new("https://api.example.com/")
 //!     .with_path_template("/user/:name")
-//!     .with_substitutes(HashMap::from([(
-//!         String::from("name"),
-//!         String::from("alex")
-//!     )]))
-//!     .with_query_params(HashMap::from([(
-//!         String::from("active"),
-//!         String::from("true")
-//!     )]))
+//!     .with_substitutes(vec![("name", "alex")])
+//!     .with_query_params(vec![("active", "true")])
 //!     .format_url()
 //!     .unwrap();
-//! // "https://api.example.com/user/alex?active=true"
+//!
+//! assert_eq!(url, "https://api.example.com/user/alex?active=true");
 //! ```
 //!
 //! ## Wishlist
