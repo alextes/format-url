@@ -16,10 +16,9 @@
 //!
 //! ## Wishlist
 //! * Support for lists and nested values. (serde_urlencoded -> serde_qs)
-//! * No need to annotate generic T for FormatUrl
+//! * Support query params as HashMap, Vec<('a str, 'a str)>, others?
 
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
-use serde::Serialize;
 
 type SubstitutePairs<'a> = Vec<(&'a str, &'a str)>;
 
@@ -42,14 +41,14 @@ fn format_path(route_template: &str, substitutes: &SubstitutePairs) -> String {
         })
 }
 
-pub struct FormatUrl<'a, T: Serialize> {
+pub struct FormatUrl<'a> {
     base: &'a str,
     path_template: Option<&'a str>,
-    query_params: Option<T>,
+    query_params: Option<Vec<(&'a str, &'a str)>>,
     substitutes: Option<SubstitutePairs<'a>>,
 }
 
-impl<'a, T: Serialize> FormatUrl<'a, T> {
+impl<'a> FormatUrl<'a> {
     pub fn new(base: &'a str) -> Self {
         Self {
             base,
@@ -64,7 +63,7 @@ impl<'a, T: Serialize> FormatUrl<'a, T> {
         self
     }
 
-    pub fn with_query_params(mut self, params: T) -> Self {
+    pub fn with_query_params(mut self, params: SubstitutePairs<'a>) -> Self {
         self.query_params = Some(params);
         self
     }
@@ -100,12 +99,12 @@ impl<'a, T: Serialize> FormatUrl<'a, T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{FormatUrl, SubstitutePairs};
+    use crate::FormatUrl;
 
     #[test]
     fn no_formatting_test() {
         assert_eq!(
-            FormatUrl::<SubstitutePairs>::new("https://api.example.com").format_url(),
+            FormatUrl::new("https://api.example.com").format_url(),
             Ok("https://api.example.com".to_string())
         );
     }
@@ -113,7 +112,7 @@ mod tests {
     #[test]
     fn path_test() {
         assert_eq!(
-            FormatUrl::<SubstitutePairs>::new("https://api.example.com",)
+            FormatUrl::new("https://api.example.com",)
                 .with_path_template("/user")
                 .format_url()
                 .unwrap(),
@@ -124,7 +123,7 @@ mod tests {
     #[test]
     fn strip_double_slash_test() {
         assert_eq!(
-            FormatUrl::<SubstitutePairs>::new("https://api.example.com/")
+            FormatUrl::new("https://api.example.com/")
                 .with_path_template("/user")
                 .format_url()
                 .unwrap(),
@@ -135,7 +134,7 @@ mod tests {
     #[test]
     fn path_substitutes_test() {
         assert_eq!(
-            FormatUrl::<SubstitutePairs>::new("https://api.example.com/",)
+            FormatUrl::new("https://api.example.com/",)
                 .with_path_template("/user/:id",)
                 .with_substitutes(vec![("id", "alextes")])
                 .format_url()
@@ -158,7 +157,7 @@ mod tests {
     #[test]
     fn percent_encode_substitutes_test() {
         assert_eq!(
-            FormatUrl::<SubstitutePairs>::new("https://api.example.com/",)
+            FormatUrl::new("https://api.example.com/",)
                 .with_path_template("/user/:id",)
                 .with_substitutes(vec![("id", "alex tes")])
                 .format_url()
@@ -170,7 +169,7 @@ mod tests {
     #[test]
     fn percent_encode_query_params_test() {
         assert_eq!(
-            FormatUrl::<SubstitutePairs>::new("https://api.example.com/user",)
+            FormatUrl::new("https://api.example.com/user",)
                 .with_query_params(vec![("id", "alex+tes")],)
                 .format_url()
                 .unwrap(),
