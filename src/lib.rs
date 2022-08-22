@@ -161,8 +161,9 @@ mod tests {
                 "/user",
                 None::<SubstitutePairs>,
                 None
-            ),
-            Ok("https://api.example.com/user".to_string())
+            )
+            .unwrap(),
+            "https://api.example.com/user"
         );
     }
 
@@ -174,8 +175,9 @@ mod tests {
                 "/user",
                 None::<SubstitutePairs>,
                 None
-            ),
-            Ok("https://api.example.com/user".to_string())
+            )
+            .unwrap(),
+            "https://api.example.com/user"
         );
     }
 
@@ -187,8 +189,9 @@ mod tests {
                 "/user/:id",
                 None::<SubstitutePairs>,
                 Some(vec![("id", "alextes")])
-            ),
-            Ok("https://api.example.com/user/alextes".to_string())
+            )
+            .unwrap(),
+            "https://api.example.com/user/alextes"
         );
     }
 
@@ -200,8 +203,9 @@ mod tests {
                 "/user",
                 Some(vec![("id", "alextes")]),
                 None
-            ),
-            Ok("https://api.example.com/user?id=alextes".to_string())
+            )
+            .unwrap(),
+            "https://api.example.com/user?id=alextes"
         );
     }
 
@@ -213,8 +217,9 @@ mod tests {
                 "/user/:id",
                 None::<SubstitutePairs>,
                 Some(vec![("id", "alex tes")]),
-            ),
-            Ok("https://api.example.com/user/alex%20tes".to_string())
+            )
+            .unwrap(),
+            "https://api.example.com/user/alex%20tes"
         )
     }
 
@@ -226,8 +231,9 @@ mod tests {
                 "/user",
                 Some(vec![("id", "alex+tes")]),
                 None,
-            ),
-            Ok("https://api.example.com/user?id=alex%2Btes".to_string())
+            )
+            .unwrap(),
+            "https://api.example.com/user?id=alex%2Btes"
         )
     }
 
