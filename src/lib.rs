@@ -113,7 +113,8 @@ mod tests {
     #[test]
     fn path_test() {
         assert_eq!(
-            FormatUrl::<SubstitutePairs>::new("https://api.example.com/user",)
+            FormatUrl::<SubstitutePairs>::new("https://api.example.com",)
+                .with_path_template("/user")
                 .format_url()
                 .unwrap(),
             "https://api.example.com/user"
@@ -123,7 +124,8 @@ mod tests {
     #[test]
     fn strip_double_slash_test() {
         assert_eq!(
-            FormatUrl::<SubstitutePairs>::new("https://api.example.com/user")
+            FormatUrl::<SubstitutePairs>::new("https://api.example.com/")
+                .with_path_template("/user")
                 .format_url()
                 .unwrap(),
             "https://api.example.com/user"
