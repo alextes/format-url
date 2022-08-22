@@ -1,6 +1,6 @@
 [package]
-categories = ["serialization", "request", "url", "querystring", ]
-description = "effortlessly construct URLs"
+categories = ["url", "serialization", "request", "querystring"]
+description = "Make building URLs more ergonomic."
 edition = "2021"
 homepage = "https://github.com/alextes/format-url"
 license = "MIT"
