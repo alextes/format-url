@@ -158,16 +158,16 @@ mod tests {
     #[test]
     fn adds_path_to_base() {
         assert_eq!(
-            format_url("https://api.example.com", "/user", None, None),
-            Ok("https://api.example.com/user".to_string())
+            format_url("https://api.example.com", "/user", None, None).unwrap(),
+            "https://api.example.com/user"
         );
     }
 
     #[test]
     fn strips_double_slash() {
         assert_eq!(
-            format_url("https://api.example.com/", "/user", None, None),
-            Ok("https://api.example.com/user".to_string())
+            format_url("https://api.example.com/", "/user", None, None).unwrap(),
+            "https://api.example.com/user"
         );
     }
 
@@ -179,8 +179,9 @@ mod tests {
                 "/user/:id",
                 None,
                 Some(vec![("id", "alextes")])
-            ),
-            Ok("https://api.example.com/user/alextes".to_string())
+            )
+            .unwrap(),
+            "https://api.example.com/user/alextes"
         );
     }
 
@@ -192,8 +193,9 @@ mod tests {
                 "/user",
                 Some(vec![("id", "alextes")]),
                 None
-            ),
-            Ok("https://api.example.com/user?id=alextes".to_string())
+            )
+            .unwrap(),
+            "https://api.example.com/user?id=alextes"
         );
     }
 
@@ -205,8 +207,9 @@ mod tests {
                 "/user/:id",
                 None,
                 Some(vec![("id", "alex tes")]),
-            ),
-            Ok("https://api.example.com/user/alex%20tes".to_string())
+            )
+            .unwrap(),
+            "https://api.example.com/user/alex%20tes"
         )
     }
 
@@ -218,8 +221,9 @@ mod tests {
                 "/user",
                 Some(vec![("id", "alex+tes")]),
                 None,
-            ),
-            Ok("https://api.example.com/user?id=alex%2Btes".to_string())
+            )
+            .unwrap(),
+            "https://api.example.com/user?id=alex%2Btes"
         )
     }
 
