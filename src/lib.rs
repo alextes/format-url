@@ -32,14 +32,12 @@
 //! ```
 //!
 //! ## Wishlist
-//! * Accept any struct as a source for path template substitutes as long as all values can be converted to string.
-//! * Accept any struct as a source for query params as long as all values can be converted to string.
 //! * Support for lists and nested values. (serde_urlencoded -> serde_qs)
 
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
-use std::collections::HashMap;
+use serde::Serialize;
 
-type StringMap = HashMap<String, String>;
+type SubstitutePairs<'a> = Vec<(&'a str, &'a str)>;
 
 fn strip_double_slash<'a>(base_url: &str, route_template: &'a str) -> &'a str {
     if base_url.ends_with("/") && route_template.starts_with("/") {
@@ -49,9 +47,9 @@ fn strip_double_slash<'a>(base_url: &str, route_template: &'a str) -> &'a str {
     }
 }
 
-fn format_path(route_template: &str, substitutes: &StringMap) -> String {
+fn format_path(route_template: &str, substitutes: &SubstitutePairs) -> String {
     substitutes
-        .into_iter()
+        .iter()
         .fold(route_template.to_owned(), |route, (key, value)| {
             route.replace(
                 &format!(":{}", key),
@@ -63,8 +61,8 @@ fn format_path(route_template: &str, substitutes: &StringMap) -> String {
 pub fn format_url(
     base_url: &str,
     path_template: &str,
-    query_params: Option<StringMap>,
-    substitutes: Option<StringMap>,
+    query_params: Option<impl Serialize>,
+    substitutes: Option<SubstitutePairs>,
 ) -> Result<String, serde_urlencoded::ser::Error> {
     let formatted_path = substitutes.map_or_else(
         || path_template.to_string(),
@@ -87,14 +85,14 @@ pub fn format_url(
     ))
 }
 
-struct FormatUrlV2<'a> {
+pub struct FormatUrlV2<'a, T: Serialize> {
     base: &'a str,
     path_template: Option<&'a str>,
-    query_params: Option<StringMap>,
-    substitutes: Option<StringMap>,
+    query_params: Option<T>,
+    substitutes: Option<SubstitutePairs<'a>>,
 }
 
-impl<'a> FormatUrlV2<'a> {
+impl<'a, T: Serialize> FormatUrlV2<'a, T> {
     pub fn new(base: &'a str) -> Self {
         Self {
             base,
@@ -109,12 +107,12 @@ impl<'a> FormatUrlV2<'a> {
         self
     }
 
-    pub fn with_query_params(mut self, params: StringMap) -> Self {
+    pub fn with_query_params(mut self, params: T) -> Self {
         self.query_params = Some(params);
         self
     }
 
-    pub fn with_substitutes(mut self, substitutes: StringMap) -> Self {
+    pub fn with_substitutes(mut self, substitutes: SubstitutePairs<'a>) -> Self {
         self.substitutes = Some(substitutes);
         self
     }
@@ -145,14 +143,12 @@ impl<'a> FormatUrlV2<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
-    use crate::{format_url, FormatUrlV2};
+    use crate::{format_url, FormatUrlV2, SubstitutePairs};
 
     #[test]
     fn accepts_empty_path() {
         assert_eq!(
-            format_url("https://api.example.com", "", None, None),
+            format_url("https://api.example.com", "", None::<SubstitutePairs>, None),
             Ok("https://api.example.com".to_string())
         );
     }
@@ -160,7 +156,12 @@ mod tests {
     #[test]
     fn adds_path_to_base() {
         assert_eq!(
-            format_url("https://api.example.com", "/user", None, None),
+            format_url(
+                "https://api.example.com",
+                "/user",
+                None::<SubstitutePairs>,
+                None
+            ),
             Ok("https://api.example.com/user".to_string())
         );
     }
@@ -168,7 +169,12 @@ mod tests {
     #[test]
     fn strips_double_slash() {
         assert_eq!(
-            format_url("https://api.example.com/", "/user", None, None),
+            format_url(
+                "https://api.example.com/",
+                "/user",
+                None::<SubstitutePairs>,
+                None
+            ),
             Ok("https://api.example.com/user".to_string())
         );
     }
@@ -179,8 +185,8 @@ mod tests {
             format_url(
                 "https://api.example.com/",
                 "/user/:id",
-                None,
-                Some(HashMap::from([("id".to_string(), "alextes".to_string())]),)
+                None::<SubstitutePairs>,
+                Some(vec![("id", "alextes")])
             ),
             Ok("https://api.example.com/user/alextes".to_string())
         );
@@ -192,7 +198,7 @@ mod tests {
             format_url(
                 "https://api.example.com/",
                 "/user",
-                Some(HashMap::from([("id".to_string(), String::from("alextes"))])),
+                Some(vec![("id", "alextes")]),
                 None
             ),
             Ok("https://api.example.com/user?id=alextes".to_string())
@@ -205,8 +211,8 @@ mod tests {
             format_url(
                 "https://api.example.com/",
                 "/user/:id",
-                None,
-                Some(HashMap::from([("id".to_string(), "alex tes".to_string())])),
+                None::<SubstitutePairs>,
+                Some(vec![("id", "alex tes")]),
             ),
             Ok("https://api.example.com/user/alex%20tes".to_string())
         )
@@ -218,7 +224,7 @@ mod tests {
             format_url(
                 "https://api.example.com/",
                 "/user",
-                Some(HashMap::from([("id".to_string(), "alex+tes".to_string())])),
+                Some(vec![("id", "alex+tes")]),
                 None,
             ),
             Ok("https://api.example.com/user?id=alex%2Btes".to_string())
@@ -230,14 +236,8 @@ mod tests {
         assert_eq!(
             FormatUrlV2::new("https://api.example.com/")
                 .with_path_template("/user/:name")
-                .with_substitutes(HashMap::from([(
-                    String::from("name"),
-                    String::from("alex")
-                )]))
-                .with_query_params(HashMap::from([(
-                    String::from("active"),
-                    String::from("true")
-                )]))
+                .with_substitutes(vec![("name", "alex")])
+                .with_query_params(vec![("active", "true")])
                 .format_url()
                 .unwrap(),
             "https://api.example.com/user/alex?active=true"
