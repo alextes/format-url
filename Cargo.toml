@@ -5,7 +5,7 @@ edition = "2021"
 homepage = "https://github.com/alextes/format-url"
 license = "MIT"
 name = "format-url"
-version = "0.6.0"
+version = "0.6.1"
 
 [dependencies]
 percent-encoding = "2"
