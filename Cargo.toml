@@ -1,5 +1,5 @@
 [package]
-categories = ["url", "serialization", "request", "querystring"]
+categories = ["encoding", "web-programming::http-client"]
 description = "Make building URLs more ergonomic."
 edition = "2021"
 homepage = "https://github.com/alextes/format-url"
