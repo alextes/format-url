@@ -1,7 +1,11 @@
 [package]
+categories = ["serialization", "request", "url", "querystring", ]
+description = "effortlessly construct URLs"
+edition = "2021"
+homepage = "https://github.com/alextes/format-url"
+license = "MIT"
 name = "format-url"
 version = "0.2.0"
-edition = "2021"
 
 [dependencies]
 percent-encoding = "2"
