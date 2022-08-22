@@ -15,7 +15,9 @@
 //!
 //! ## Wishlist
 //! * Support for lists and nested values. (serde_urlencoded -> serde_qs)
-//! * Support query params as HashMap, Vec<('a str, 'a str)>, others?
+//! * Support receiving query params as any value serde_urlencoded or serde_qs can serialize.
+//! * Support receiving path template substitutes as a (Hash)Map, perhaps even a struct with
+//! matching fields.
 
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 
