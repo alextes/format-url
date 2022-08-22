@@ -8,8 +8,7 @@
 //!     .with_path_template("/user/:name")
 //!     .with_substitutes(vec![("name", "alex")])
 //!     .with_query_params(vec![("active", "true")])
-//!     .format_url()
-//!     .unwrap();
+//!     .format_url();
 //!
 //! assert_eq!(url, "https://api.example.com/user/alex?active=true");
 //! ```
@@ -35,7 +34,7 @@ fn format_path(route_template: &str, substitutes: &SubstitutePairs) -> String {
         .iter()
         .fold(route_template.to_owned(), |route, (key, value)| {
             route.replace(
-                &format!(":{}", key),
+                &format!(":{key}"),
                 &utf8_percent_encode(&value, NON_ALPHANUMERIC).to_string(),
             )
         })
@@ -45,7 +44,7 @@ pub struct FormatUrl<'a> {
     base: &'a str,
     disable_encoding: bool,
     path_template: Option<&'a str>,
-    query_params: Option<Vec<(&'a str, &'a str)>>,
+    query_params: Option<SubstitutePairs<'a>>,
     substitutes: Option<SubstitutePairs<'a>>,
 }
 
@@ -80,7 +79,7 @@ impl<'a> FormatUrl<'a> {
         self
     }
 
-    pub fn format_url(self) -> Result<String, serde_urlencoded::ser::Error> {
+    pub fn format_url(self) -> String {
         let formatted_path = match (self.path_template, &self.substitutes) {
             (Some(path_template), Some(substitutes)) => format_path(path_template, &substitutes),
             (Some(path_template), _) => path_template.to_string(),
@@ -88,11 +87,21 @@ impl<'a> FormatUrl<'a> {
         };
 
         let formatted_querystring = &self.query_params.map_or_else(
-            || Ok(String::new()),
+            || String::new(),
             |query_params| match self.disable_encoding {
                 false => {
-                    let query_string = serde_urlencoded::to_string(query_params)?;
-                    Ok("?".to_string() + (&query_string))
+                    let query_string = query_params
+                        .iter()
+                        .map(|(key, value)| {
+                            format!(
+                                "{}={}",
+                                utf8_percent_encode(key, NON_ALPHANUMERIC),
+                                utf8_percent_encode(value, NON_ALPHANUMERIC)
+                            )
+                        })
+                        .collect::<Vec<String>>()
+                        .join("&");
+                    "?".to_string() + (&query_string)
                 }
                 true => {
                     let query_string = query_params
@@ -100,17 +109,17 @@ impl<'a> FormatUrl<'a> {
                         .map(|(key, value)| format!("{key}={value}"))
                         .collect::<Vec<String>>()
                         .join("&");
-                    Ok("?".to_string() + &query_string)
+                    "?".to_string() + &query_string
                 }
             },
-        )?;
+        );
 
         let safe_formatted_route = strip_double_slash(self.base, &formatted_path);
 
-        Ok(format!(
+        format!(
             "{}{}{}",
             self.base, safe_formatted_route, formatted_querystring
-        ))
+        )
     }
 }
 
@@ -122,7 +131,7 @@ mod tests {
     fn no_formatting_test() {
         assert_eq!(
             FormatUrl::new("https://api.example.com").format_url(),
-            Ok("https://api.example.com".to_string())
+            "https://api.example.com".to_string()
         );
     }
 
@@ -131,8 +140,7 @@ mod tests {
         assert_eq!(
             FormatUrl::new("https://api.example.com",)
                 .with_path_template("/user")
-                .format_url()
-                .unwrap(),
+                .format_url(),
             "https://api.example.com/user"
         );
     }
@@ -142,8 +150,7 @@ mod tests {
         assert_eq!(
             FormatUrl::new("https://api.example.com/")
                 .with_path_template("/user")
-                .format_url()
-                .unwrap(),
+                .format_url(),
             "https://api.example.com/user"
         );
     }
@@ -154,8 +161,7 @@ mod tests {
             FormatUrl::new("https://api.example.com/",)
                 .with_path_template("/user/:id",)
                 .with_substitutes(vec![("id", "alextes")])
-                .format_url()
-                .unwrap(),
+                .format_url(),
             "https://api.example.com/user/alextes"
         );
     }
@@ -165,8 +171,7 @@ mod tests {
         assert_eq!(
             FormatUrl::new("https://api.example.com/user",)
                 .with_query_params(vec![("id", "alextes")],)
-                .format_url()
-                .unwrap(),
+                .format_url(),
             "https://api.example.com/user?id=alextes"
         );
     }
@@ -177,8 +182,7 @@ mod tests {
             FormatUrl::new("https://api.example.com/",)
                 .with_path_template("/user/:id",)
                 .with_substitutes(vec![("id", "alex tes")])
-                .format_url()
-                .unwrap(),
+                .format_url(),
             "https://api.example.com/user/alex%20tes"
         )
     }
@@ -188,8 +192,7 @@ mod tests {
         assert_eq!(
             FormatUrl::new("https://api.example.com/user",)
                 .with_query_params(vec![("id", "alex+tes")],)
-                .format_url()
-                .unwrap(),
+                .format_url(),
             "https://api.example.com/user?id=alex%2Btes"
         )
     }
@@ -200,8 +203,7 @@ mod tests {
             FormatUrl::new("https://api.example.com/user",)
                 .with_query_params(vec![("id", "alex+tes")],)
                 .disable_encoding()
-                .format_url()
-                .unwrap(),
+                .format_url(),
             "https://api.example.com/user?id=alex+tes"
         )
     }
