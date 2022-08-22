@@ -103,7 +103,7 @@ mod tests {
     use crate::{FormatUrl, SubstitutePairs};
 
     #[test]
-    fn accepts_empty_path() {
+    fn no_formatting_test() {
         assert_eq!(
             FormatUrl::<SubstitutePairs>::new("https://api.example.com").format_url(),
             Ok("https://api.example.com".to_string())
@@ -111,7 +111,7 @@ mod tests {
     }
 
     #[test]
-    fn adds_path_to_base() {
+    fn path_test() {
         assert_eq!(
             FormatUrl::<SubstitutePairs>::new("https://api.example.com/user",)
                 .format_url()
@@ -121,7 +121,7 @@ mod tests {
     }
 
     #[test]
-    fn strips_double_slash() {
+    fn strip_double_slash_test() {
         assert_eq!(
             FormatUrl::<SubstitutePairs>::new("https://api.example.com/user")
                 .format_url()
@@ -131,7 +131,7 @@ mod tests {
     }
 
     #[test]
-    fn adds_path_substitutes() {
+    fn path_substitutes_test() {
         assert_eq!(
             FormatUrl::<SubstitutePairs>::new("https://api.example.com/",)
                 .with_path_template("/user/:id",)
@@ -143,7 +143,7 @@ mod tests {
     }
 
     #[test]
-    fn adds_querystring() {
+    fn querystring_test() {
         assert_eq!(
             FormatUrl::new("https://api.example.com/user",)
                 .with_query_params(vec![("id", "alextes")],)
@@ -154,7 +154,7 @@ mod tests {
     }
 
     #[test]
-    fn percent_encodes_substitutes() {
+    fn percent_encode_substitutes_test() {
         assert_eq!(
             FormatUrl::<SubstitutePairs>::new("https://api.example.com/",)
                 .with_path_template("/user/:id",)
@@ -166,7 +166,7 @@ mod tests {
     }
 
     #[test]
-    fn percent_encodes_query_params() {
+    fn percent_encode_query_params_test() {
         assert_eq!(
             FormatUrl::<SubstitutePairs>::new("https://api.example.com/user",)
                 .with_query_params(vec![("id", "alex+tes")],)
