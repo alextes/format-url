@@ -43,6 +43,7 @@ fn format_path(route_template: &str, substitutes: &SubstitutePairs) -> String {
 
 pub struct FormatUrl<'a> {
     base: &'a str,
+    disable_encoding: bool,
     path_template: Option<&'a str>,
     query_params: Option<Vec<(&'a str, &'a str)>>,
     substitutes: Option<SubstitutePairs<'a>>,
@@ -52,6 +53,7 @@ impl<'a> FormatUrl<'a> {
     pub fn new(base: &'a str) -> Self {
         Self {
             base,
+            disable_encoding: false,
             path_template: None,
             query_params: None,
             substitutes: None,
@@ -73,6 +75,11 @@ impl<'a> FormatUrl<'a> {
         self
     }
 
+    pub fn disable_encoding(mut self) -> Self {
+        self.disable_encoding = true;
+        self
+    }
+
     pub fn format_url(self) -> Result<String, serde_urlencoded::ser::Error> {
         let formatted_path = match (self.path_template, &self.substitutes) {
             (Some(path_template), Some(substitutes)) => format_path(path_template, &substitutes),
@@ -82,9 +89,19 @@ impl<'a> FormatUrl<'a> {
 
         let formatted_querystring = &self.query_params.map_or_else(
             || Ok(String::new()),
-            |query_params| {
-                let query_string = serde_urlencoded::to_string(query_params)?;
-                Ok(String::from("?") + (&query_string))
+            |query_params| match self.disable_encoding {
+                false => {
+                    let query_string = serde_urlencoded::to_string(query_params)?;
+                    Ok("?".to_string() + (&query_string))
+                }
+                true => {
+                    let query_string = query_params
+                        .iter()
+                        .map(|(key, value)| format!("{key}={value}"))
+                        .collect::<Vec<String>>()
+                        .join("&");
+                    Ok("?".to_string() + &query_string)
+                }
             },
         )?;
 
@@ -174,6 +191,18 @@ mod tests {
                 .format_url()
                 .unwrap(),
             "https://api.example.com/user?id=alex%2Btes"
+        )
+    }
+
+    #[test]
+    fn disable_encoding_test() {
+        assert_eq!(
+            FormatUrl::new("https://api.example.com/user",)
+                .with_query_params(vec![("id", "alex+tes")],)
+                .disable_encoding()
+                .format_url()
+                .unwrap(),
+            "https://api.example.com/user?id=alex+tes"
         )
     }
 }
