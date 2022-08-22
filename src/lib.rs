@@ -1,27 +1,10 @@
 //! Format URLs for fetch requests using templates and substitution values.
 //!
-//! This library is currently considering a pure function based design where the data required is
-//! essentially constructed in the function call, and a builder pattern design.
-//!
-//! ## Usage - fn pattern
+//! ## Usage
 //! ```
-//! use format_url::format_url;
+//! use format_url::FormatUrl;
 //!
-//! let url = format_url(
-//!     "https://api.example.com/",
-//!     "/user",
-//!     Some(vec![("id", "alex+tes")]),
-//!     None,
-//! ).unwrap();
-//!
-//! assert_eq!(url, "https://api.example.com/user?id=alex%2Btes");
-//! ```
-//!
-//! ## Usage - builder pattern
-//! ```
-//! use format_url::FormatUrlV2;
-//!
-//! let url = FormatUrlV2::new("https://api.example.com/")
+//! let url = FormatUrl::new("https://api.example.com/")
 //!     .with_path_template("/user/:name")
 //!     .with_substitutes(vec![("name", "alex")])
 //!     .with_query_params(vec![("active", "true")])
@@ -58,41 +41,14 @@ fn format_path(route_template: &str, substitutes: &SubstitutePairs) -> String {
         })
 }
 
-pub fn format_url(
-    base_url: &str,
-    path_template: &str,
-    query_params: Option<impl Serialize>,
-    substitutes: Option<SubstitutePairs>,
-) -> Result<String, serde_urlencoded::ser::Error> {
-    let formatted_path = substitutes.map_or_else(
-        || path_template.to_string(),
-        |substitutes| format_path(path_template, &substitutes),
-    );
-
-    let formatted_querystring = query_params.map_or_else(
-        || Ok(String::new()),
-        |query_params| {
-            let query_string = serde_urlencoded::to_string(query_params)?;
-            Ok(String::from("?") + (&query_string))
-        },
-    )?;
-
-    let safe_formatted_route = strip_double_slash(base_url, &formatted_path);
-
-    Ok(format!(
-        "{}{}{}",
-        base_url, safe_formatted_route, formatted_querystring
-    ))
-}
-
-pub struct FormatUrlV2<'a, T: Serialize> {
+pub struct FormatUrl<'a, T: Serialize> {
     base: &'a str,
     path_template: Option<&'a str>,
     query_params: Option<T>,
     substitutes: Option<SubstitutePairs<'a>>,
 }
 
-impl<'a, T: Serialize> FormatUrlV2<'a, T> {
+impl<'a, T: Serialize> FormatUrl<'a, T> {
     pub fn new(base: &'a str) -> Self {
         Self {
             base,
@@ -143,12 +99,12 @@ impl<'a, T: Serialize> FormatUrlV2<'a, T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{format_url, FormatUrlV2, SubstitutePairs};
+    use crate::{FormatUrl, SubstitutePairs};
 
     #[test]
     fn accepts_empty_path() {
         assert_eq!(
-            format_url("https://api.example.com", "", None::<SubstitutePairs>, None),
+            FormatUrl::<SubstitutePairs>::new("https://api.example.com").format_url(),
             Ok("https://api.example.com".to_string())
         );
     }
@@ -156,13 +112,9 @@ mod tests {
     #[test]
     fn adds_path_to_base() {
         assert_eq!(
-            format_url(
-                "https://api.example.com",
-                "/user",
-                None::<SubstitutePairs>,
-                None
-            )
-            .unwrap(),
+            FormatUrl::<SubstitutePairs>::new("https://api.example.com/user",)
+                .format_url()
+                .unwrap(),
             "https://api.example.com/user"
         );
     }
@@ -170,13 +122,9 @@ mod tests {
     #[test]
     fn strips_double_slash() {
         assert_eq!(
-            format_url(
-                "https://api.example.com/",
-                "/user",
-                None::<SubstitutePairs>,
-                None
-            )
-            .unwrap(),
+            FormatUrl::<SubstitutePairs>::new("https://api.example.com/user")
+                .format_url()
+                .unwrap(),
             "https://api.example.com/user"
         );
     }
@@ -184,13 +132,11 @@ mod tests {
     #[test]
     fn adds_path_substitutes() {
         assert_eq!(
-            format_url(
-                "https://api.example.com/",
-                "/user/:id",
-                None::<SubstitutePairs>,
-                Some(vec![("id", "alextes")])
-            )
-            .unwrap(),
+            FormatUrl::<SubstitutePairs>::new("https://api.example.com/",)
+                .with_path_template("/user/:id",)
+                .with_substitutes(vec![("id", "alextes")])
+                .format_url()
+                .unwrap(),
             "https://api.example.com/user/alextes"
         );
     }
@@ -198,13 +144,10 @@ mod tests {
     #[test]
     fn adds_querystring() {
         assert_eq!(
-            format_url(
-                "https://api.example.com/",
-                "/user",
-                Some(vec![("id", "alextes")]),
-                None
-            )
-            .unwrap(),
+            FormatUrl::new("https://api.example.com/user",)
+                .with_query_params(vec![("id", "alextes")],)
+                .format_url()
+                .unwrap(),
             "https://api.example.com/user?id=alextes"
         );
     }
@@ -212,13 +155,11 @@ mod tests {
     #[test]
     fn percent_encodes_substitutes() {
         assert_eq!(
-            format_url(
-                "https://api.example.com/",
-                "/user/:id",
-                None::<SubstitutePairs>,
-                Some(vec![("id", "alex tes")]),
-            )
-            .unwrap(),
+            FormatUrl::<SubstitutePairs>::new("https://api.example.com/",)
+                .with_path_template("/user/:id",)
+                .with_substitutes(vec![("id", "alex tes")])
+                .format_url()
+                .unwrap(),
             "https://api.example.com/user/alex%20tes"
         )
     }
@@ -226,13 +167,10 @@ mod tests {
     #[test]
     fn percent_encodes_query_params() {
         assert_eq!(
-            format_url(
-                "https://api.example.com/",
-                "/user",
-                Some(vec![("id", "alex+tes")]),
-                None,
-            )
-            .unwrap(),
+            FormatUrl::<SubstitutePairs>::new("https://api.example.com/user",)
+                .with_query_params(vec![("id", "alex+tes")],)
+                .format_url()
+                .unwrap(),
             "https://api.example.com/user?id=alex%2Btes"
         )
     }
@@ -240,7 +178,7 @@ mod tests {
     #[test]
     fn test_v2_format_url() {
         assert_eq!(
-            FormatUrlV2::new("https://api.example.com/")
+            FormatUrl::new("https://api.example.com/")
                 .with_path_template("/user/:name")
                 .with_substitutes(vec![("name", "alex")])
                 .with_query_params(vec![("active", "true")])
