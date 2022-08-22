@@ -175,17 +175,4 @@ mod tests {
             "https://api.example.com/user?id=alex%2Btes"
         )
     }
-
-    #[test]
-    fn test_v2_format_url() {
-        assert_eq!(
-            FormatUrl::new("https://api.example.com/")
-                .with_path_template("/user/:name")
-                .with_substitutes(vec![("name", "alex")])
-                .with_query_params(vec![("active", "true")])
-                .format_url()
-                .unwrap(),
-            "https://api.example.com/user/alex?active=true"
-        )
-    }
 }
