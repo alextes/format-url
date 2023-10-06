@@ -8,4 +8,4 @@ name = "format-url"
 version = "0.6.2"
 
 [dependencies]
-percent-encoding = "2"
+percent-encoding = "2.3.0"
