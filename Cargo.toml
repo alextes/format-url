@@ -2,6 +2,7 @@
 categories = ["encoding", "web-programming::http-client"]
 description = "Make building URLs more ergonomic."
 edition = "2021"
+keywords = ["encoding", "format", "query-params", "query", "path"]
 license = "MIT"
 name = "format-url"
 repository = "https://github.com/alextes/format-url"
